@@ -2,7 +2,7 @@
 
 A Winamp-style audio player written in Go. macOS first, Linux and Windows later.
 
-Status: step 3 of 4. Player window with a playlist; CI and macOS app packaging come next.
+Status: player window with a playlist, CI and release builds (steps 1-4 of the initial plan).
 
 ![xWinAmp main window](docs/screenshot.png)
 
@@ -13,6 +13,8 @@ Status: step 3 of 4. Player window with a playlist; CI and macOS app packaging c
 - `playlist/` - track list, next/prev, repeat/shuffle, M3U. No UI code.
 - `cmd/xwinamp/` - the desktop player; saves the playlist and settings between runs.
 - `cmd/xwinamp-cli/` - terminal player built on `player`.
+- `tools/mkicon/` - draws the app icon.
+- `scripts/build-app.sh` - builds `dist/xWinAmp.app` on macOS.
 
 Supported formats: MP3, WAV, FLAC, OGG Vorbis.
 
@@ -56,6 +58,24 @@ While playing, type a command and press Enter: `p` pause/resume, `s` stop,
 - Linux: cgo plus ALSA and X11/OpenGL headers, e.g.
   `sudo apt install libasound2-dev libgl1-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxxf86vm-dev`.
   File dialogs need `zenity` or `kdialog` installed.
+
+## macOS app
+
+```sh
+scripts/build-app.sh            # dist/xWinAmp.app and dist/xWinAmp-macos.zip
+VERSION=1.0.0 scripts/build-app.sh
+```
+
+The app is a universal binary (Apple Silicon and Intel). It is ad-hoc signed,
+not signed with a Developer ID, so on first launch open it with right click →
+Open.
+
+## Releases
+
+Pushing a tag like `v0.1.0` runs `.github/workflows/release.yml`, which builds
+the macOS app, a Linux binary and a Windows `.exe` and attaches them to a
+GitHub Release. `.github/workflows/ci.yml` checks formatting, vet and tests on
+Linux and macOS for every pull request.
 
 ## Tests
 
