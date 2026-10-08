@@ -1,5 +1,7 @@
 # xWinAmp
 
+[![CI](https://github.com/rooty/xwinamp/actions/workflows/ci.yml/badge.svg)](https://github.com/rooty/xwinamp/actions/workflows/ci.yml)
+
 A Winamp-style audio player written in Go. macOS first, Linux and Windows later.
 
 Status: player window with a playlist, CI and release builds (steps 1-4 of the initial plan).
@@ -84,3 +86,8 @@ go test -race ./...
 ```
 
 Tests use a fake audio output and a fake player, so they run without a sound card or a display.
+
+## License
+
+MIT, see [LICENSE](LICENSE). xWinAmp is an independent project, not affiliated
+with Winamp; it uses no Winamp code or artwork.
