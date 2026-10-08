@@ -2,9 +2,10 @@
 //
 // Usage:
 //
-//	xwinamp [-scale 2] [file]
+//	xwinamp [-scale 2] [file or folder...]
 //
-// Files can also be dropped onto the window.
+// Files and folders can also be dropped onto the window. The playlist and
+// settings are restored from the previous run.
 package main
 
 import (
@@ -14,13 +15,15 @@ import (
 	"path/filepath"
 
 	"github.com/rooty/xwinamp/player"
+	"github.com/rooty/xwinamp/playlist"
 	"github.com/rooty/xwinamp/ui"
 )
 
 func main() {
 	scale := flag.Int("scale", 2, "window scale, 1..4")
+	fresh := flag.Bool("fresh", false, "start with an empty playlist and default settings")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s [-scale n] [file...]\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(os.Stderr, "usage: %s [-scale n] [-fresh] [file or folder...]\n", filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -32,12 +35,32 @@ func main() {
 	}
 	defer p.Close()
 
-	c := ui.NewController(p)
+	pl := playlist.New()
+	c := ui.NewController(p, pl, ui.SystemDialogs{})
+
+	dir, dirErr := stateDir()
+	if dirErr != nil {
+		fmt.Fprintln(os.Stderr, "settings will not be saved:", dirErr)
+	}
+	if dirErr == nil && !*fresh {
+		if err := loadState(dir, c, p); err != nil {
+			fmt.Fprintln(os.Stderr, "restore previous session:", err)
+		}
+	}
+
+	c.ProbeDurations()
 	if flag.NArg() > 0 {
 		c.Open(flag.Args())
 	}
-	if err := ui.NewWindow(c).Run(max(1, min(*scale, 4))); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	runErr := ui.NewWindow(c).Run(max(1, min(*scale, 4)))
+
+	if dirErr == nil {
+		if err := saveState(dir, c, p); err != nil {
+			fmt.Fprintln(os.Stderr, "save session:", err)
+		}
+	}
+	if runErr != nil {
+		fmt.Fprintln(os.Stderr, runErr)
 		os.Exit(1)
 	}
 }

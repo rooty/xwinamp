@@ -31,13 +31,16 @@ var (
 	colBtnHi     = color.RGBA{0xee, 0xee, 0xf6, 0xff}
 	colBtnLo     = color.RGBA{0x50, 0x50, 0x60, 0xff}
 	colIcon      = color.RGBA{0x20, 0x20, 0x30, 0xff}
+	colLit       = color.RGBA{0x00, 0x80, 0x00, 0xff}
+	colSelect    = color.RGBA{0x00, 0x00, 0xc6, 0xff}
+	colCurrent   = color.RGBA{0xff, 0xff, 0xff, 0xff}
 )
 
 var font = text.NewGoXFace(basicfont.Face7x13)
 
 func drawWindow(dst *ebiten.Image, v View) {
 	dst.Fill(colBody)
-	bevel(dst, dst.Bounds(), colBevelHi, colBevelLo)
+	bevel(dst, image.Rect(0, 0, Width, Height), colBevelHi, colBevelLo)
 
 	drawTitleBar(dst)
 	drawDisplay(dst, v)
@@ -45,9 +48,52 @@ func drawWindow(dst *ebiten.Image, v View) {
 	drawText(dst, infoRect, v.Info, colLCDInfo, 0)
 	drawVolume(dst, v.Volume)
 	drawSeek(dst, v)
-	for b, r := range buttonRects {
-		drawButton(dst, b, r, v.Pressed == b)
+	if v.ShowPlaylist {
+		drawPlaylist(dst, v)
 	}
+	lit := map[Button]bool{BtnShuffle: v.Shuffle, BtnRepeat: v.Repeat, BtnPlaylist: v.ShowPlaylist}
+	for b, r := range buttonRects {
+		if inPanel(b) && !v.ShowPlaylist {
+			continue
+		}
+		drawButton(dst, b, r, v.Pressed == b, lit[b])
+	}
+}
+
+func drawPlaylist(dst *ebiten.Image, v View) {
+	bevel(dst, panelRect, colBevelHi, colBevelLo)
+
+	fillRect(dst, listRect, colScreen)
+	bevel(dst, listRect.Inset(-1), colBevelLo, colBevelHi)
+	list := dst.SubImage(listRect).(*ebiten.Image)
+	for i, row := range v.Rows {
+		r := image.Rect(listRect.Min.X, listRect.Min.Y+i*rowHeight, listRect.Max.X, listRect.Min.Y+(i+1)*rowHeight)
+		if row.Selected {
+			fillRect(list, r, colSelect)
+		}
+		c := colLCD
+		if row.Current {
+			c = colCurrent
+		}
+		// Clip the title so it never runs under the time.
+		tw, _ := text.Measure(row.Time, font, 0)
+		titleArea := list.SubImage(image.Rect(r.Min.X, r.Min.Y, r.Max.X-int(tw)-10, r.Max.Y)).(*ebiten.Image)
+		drawText(titleArea, r, row.Text, c, 2)
+		if row.Time != "" {
+			drawText(list, image.Rect(r.Max.X-int(tw)-2, r.Min.Y, r.Max.X, r.Max.Y), row.Time, c, 0)
+		}
+	}
+
+	fillRect(dst, scrollbarRect, colGroove)
+	if v.ListSize > 0 {
+		h := float64(scrollbarRect.Dy())
+		thumb := image.Rect(scrollbarRect.Min.X, scrollbarRect.Min.Y+int(v.ListPos*h),
+			scrollbarRect.Max.X, scrollbarRect.Min.Y+int((v.ListPos+v.ListSize)*h))
+		fillRect(dst, thumb, colKnob)
+	}
+
+	tw, _ := text.Measure(v.PlaylistInfo, font, 0)
+	drawText(dst, panelInfoRect, v.PlaylistInfo, colLCDInfo, panelInfoRect.Dx()-int(tw))
 }
 
 func drawTitleBar(dst *ebiten.Image) {
@@ -131,7 +177,7 @@ func drawSeek(dst *ebiten.Image, v View) {
 	bevel(dst, knob, colBtnHi, colBtnLo)
 }
 
-func drawButton(dst *ebiten.Image, b Button, r image.Rectangle, down bool) {
+func drawButton(dst *ebiten.Image, b Button, r image.Rectangle, down, lit bool) {
 	face, hi, lo := colBtnFace, colBtnHi, colBtnLo
 	if down {
 		face, hi, lo = colBtnDown, colBtnLo, colBtnHi
@@ -143,6 +189,17 @@ func drawButton(dst *ebiten.Image, b Button, r image.Rectangle, down bool) {
 	if down {
 		c = c.Add(image.Pt(1, 1))
 	}
+	if label, ok := buttonLabels[b]; ok {
+		col := color.Color(colIcon)
+		if lit {
+			col = colLit
+		}
+		w, _ := text.Measure(label, font, 0)
+		lr := r.Add(c.Sub(r.Min.Add(r.Size().Div(2))))
+		drawText(dst, lr, label, col, (r.Dx()-int(w))/2)
+		return
+	}
+
 	x, y := float32(c.X), float32(c.Y)
 	switch b {
 	case BtnPrev:
