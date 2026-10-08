@@ -21,11 +21,20 @@ var keyActions = map[ebiten.Key]Action{
 	ebiten.KeyArrowRight: ActSeekForward,
 	ebiten.KeyArrowUp:    ActVolumeUp,
 	ebiten.KeyArrowDown:  ActVolumeDown,
+	ebiten.KeyS:          ActShuffle,
+	ebiten.KeyR:          ActRepeat,
+	ebiten.KeyP:          ActTogglePlaylist,
+	ebiten.KeyDelete:     ActRemove,
+	ebiten.KeyBackspace:  ActRemove,
+	ebiten.KeyEnter:      ActPlaySelected,
 }
 
 // Window is the Ebitengine game that shows the main window.
 type Window struct {
-	c *Controller
+	c      *Controller
+	scale  int
+	height int     // logical height the window was last sized for
+	wheel  float64 // unapplied fraction of wheel movement
 }
 
 // NewWindow returns a window driven by c.
@@ -35,8 +44,9 @@ func NewWindow(c *Controller) *Window {
 
 // Run opens the window at the given scale and blocks until it is closed.
 func (w *Window) Run(scale int) error {
+	w.scale, w.height = scale, w.c.Height()
 	ebiten.SetWindowTitle("xWinAmp")
-	ebiten.SetWindowSize(Width*scale, Height*scale)
+	ebiten.SetWindowSize(Width*scale, w.height*scale)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	// Keep pixels crisp when scaled up.
 	ebiten.SetScreenFilterEnabled(false)
@@ -67,7 +77,21 @@ func (w *Window) Update() error {
 		w.c.MouseMove(p)
 	}
 
+	// Trackpads report small fractional steps; accumulate them into rows.
+	_, dy := ebiten.Wheel()
+	w.wheel += dy
+	if rows := int(w.wheel); rows != 0 {
+		w.wheel -= float64(rows)
+		w.c.Wheel(-rows) // wheel up (positive dy) scrolls the list up
+	}
+
 	w.c.Tick()
+
+	// Showing or hiding the playlist changes the window height.
+	if h := w.c.Height(); h != w.height {
+		w.height = h
+		ebiten.SetWindowSize(Width*w.scale, h*w.scale)
+	}
 	return nil
 }
 
@@ -81,7 +105,7 @@ func isKeyRepeated(k ebiten.Key, a Action) bool {
 	return false
 }
 
-// droppedPaths returns the real paths of files dropped onto the window this tick.
+// droppedPaths returns the real paths of files and folders dropped onto the window this tick.
 func droppedPaths() []string {
 	fsys := ebiten.DroppedFiles()
 	if fsys == nil {
@@ -93,9 +117,6 @@ func droppedPaths() []string {
 	}
 	var paths []string
 	for _, e := range entries {
-		if e.IsDir() {
-			continue // folders come with the playlist
-		}
 		if ap, ok := e.(ebiten.AbsPather); ok {
 			paths = append(paths, ap.AbsPath())
 		}
@@ -111,5 +132,5 @@ func (w *Window) Draw(screen *ebiten.Image) {
 // Layout implements ebiten.Game: always draw at the logical size and let
 // Ebitengine scale it to the window.
 func (w *Window) Layout(_, _ int) (int, int) {
-	return Width, Height
+	return Width, w.c.Height()
 }
